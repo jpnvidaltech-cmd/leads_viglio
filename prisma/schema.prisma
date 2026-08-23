@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id           Int       @id @default(autoincrement())
+  nombre       String?   @db.VarChar(255)
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  rol          String    @default("lectura") @db.VarChar(50) // "admin" | "lectura"
+  activo       Boolean   @default(true)
+  creadoEn     DateTime  @default(now()) @map("creado_en") @db.Timestamp(6)
+  ultimoLogin  DateTime? @map("ultimo_login") @db.Timestamp(6)
+
+  @@map("usuarios")
+}
+
+model Curso {
+  id                   Int            @id @default(autoincrement())
+  codigo               String         @unique @db.VarChar(20)
+  nombreDelCurso       String         @map("nombre_del_curso") @db.VarChar(255)
+  tipoModalidad        String?        @map("tipo_modalidad")
+  nivel                String?        @db.VarChar(100)
+  cargaHorariaDuracion String?        @map("carga_horaria_duracion") @db.VarChar(100)
+  contenidoResumido    String?        @map("contenido_resumido")
+  incluye              String?
+  formaDePago          String?        @default("Transferencia bancaria, Western Union, PayPal") @map("forma_de_pago") @db.VarChar(150)
+  contactoInscripcion  String?        @default("perezgiugovaz.com/contacto o info@perezgiugovaz.com") @map("contacto_inscripcion") @db.VarChar(150)
+  ultimaActualizacion  DateTime?      @default(now()) @map("ultima_actualizacion") @db.Timestamptz(6)
+  ediciones            CursoEdicion[]
+
+  @@map("cursos")
+}
+
+model CursoEdicion {
+  id                Int       @id @default(autoincrement())
+  cursoId           Int       @map("curso_id")
+  nombreEdicion     String?   @map("nombre_edicion") @db.VarChar(100)
+  dictante          String?   @db.VarChar(150)
+  fechaInicio       DateTime? @map("fecha_inicio") @db.Date
+  fechasEspecificas String?   @map("fechas_especificas")
+  participantes     String?   @db.VarChar(50)
+  precio            String?   @default("Consultar (no publicado en la web)") @db.VarChar(100)
+  estado            String?   @default("Programada") @db.VarChar(50)
+  curso             Curso     @relation(fields: [cursoId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("curso_ediciones")
+}
+
+model LeadConversacion {
+  id               Int       @id @default(autoincrement())
+  channel          String?   @db.VarChar(50)
+  contactName      String?   @map("contact_name") @db.VarChar(150)
+  phone            String?   @db.VarChar(50)
+  telegramId       String?   @map("telegram_id") @db.VarChar(100)
+  instagramId      String?   @map("instagram_id") @db.VarChar(100)
+  categoriaInteres String?   @map("categoria_interes") @db.VarChar(100)
+  detalleInteres   String?   @map("detalle_interes")
+  requiereFollowup Boolean?  @default(false) @map("requiere_followup")
+  resumenEjecutivo String?   @map("resumen_ejecutivo")
+  fechaMensaje     DateTime? @map("fecha_mensaje") @db.Date
+  horaMensaje      DateTime? @map("hora_mensaje") @db.Time(6)
+  cantidadMensajes Int?      @default(0) @map("cantidad_mensajes")
+  conversationId   String?   @map("conversation_id") @db.VarChar(100)
+  creadoEn         DateTime? @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  @@map("leads_conversaciones")
+}
+
+model Producto {
+  id                  Int       @id(map: "productos_pkey") @default(autoincrement())
+  producto            String    @db.VarChar(150)
+  descripcionBreve    String?   @map("descripcion_breve")
+  precio              String?   @default("Consultar") @db.VarChar(50)
+  contacto            String?   @default("info@perezgiugovaz.com") @db.VarChar(150)
+  ultimaActualizacion DateTime? @default(now()) @map("ultima_actualizacion") @db.Timestamptz(6)
+
+  @@map("equipos")
+}
+
+model CatalogoDigital {
+  id             Int       @id(map: "catalogo_digital_pkey") @default(autoincrement())
+  producto       String    @db.VarChar(150)
+  precioActual   Decimal   @default(0.00) @map("precio_actual") @db.Decimal(10, 2)
+  precioOriginal Decimal?  @map("precio_original") @db.Decimal(10, 2)
+  moneda         String?   @default("EUR") @db.VarChar(10)
+  enOferta       Boolean?  @default(false) @map("en_oferta")
+  gratis         Boolean?  @default(false) @map("gratis")
+  notas          String?
+  creadoEn       DateTime? @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  @@map("librerias")
+}

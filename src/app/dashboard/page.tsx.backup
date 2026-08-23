@@ -1,0 +1,474 @@
+"use client";
+
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Search,
+  Filter,
+  Instagram,
+  Send,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  User,
+  MessageSquare,
+  Phone,
+  Bookmark,
+  Calendar,
+  X,
+  Eye,
+} from "lucide-react";
+
+interface Lead {
+  id: number;
+  channel: string;
+  contactName: string;
+  phone: string;
+  telegramId: string;
+  instagramId: string;
+  categoriaInteres: string;
+  detalleInteres: string;
+  requiereFollowup: boolean;
+  resumenEjecutivo: string;
+  fechaMensaje: string;
+  horaMensaje: string;
+  cantidadMensajes: number;
+  conversationId: string;
+}
+
+export default function LeadsPage() {
+  const [search, setSearch] = useState("");
+  const [channel, setChannel] = useState("all");
+  const [requiresFollowUp, setRequiresFollowUp] = useState("all");
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  // Fetch leads using React Query
+  const { data: leads = [], isLoading, error } = useQuery<Lead[]>({
+    queryKey: ["leads", channel, requiresFollowUp, search],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (channel !== "all") params.append("channel", channel);
+      if (requiresFollowUp !== "all") params.append("requiresFollowUp", requiresFollowUp);
+      if (search) params.append("search", search);
+
+      const res = await fetch(`/api/leads?${params.toString()}`);
+      if (!res.ok) throw new Error("Error fetching leads");
+      return res.json();
+    },
+  });
+
+  const formatTime = (timeString: string | null) => {
+    if (!timeString) return "";
+    // timeString is like "1970-01-01T15:30:00.000Z" or similar due to Postgres TIME mapping
+    try {
+      const date = new Date(timeString);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+      }
+      // fallback if it's already a clean string "15:30:00"
+      return timeString.split(".")[0].slice(0, 5);
+    } catch {
+      return timeString;
+    }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("es-AR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        timeZone: "UTC"
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Page Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-extrabold text-[var(--color-primary)]">
+          Seguimiento de Leads
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Registro histórico de contactos e interés recopilados por el Agente de IA.
+        </p>
+      </div>
+
+      {/* Filters and Search controls */}
+      <div className="bg-white p-4 rounded-[var(--radius-custom)] shadow-sm border border-gray-100 mb-6 space-y-4 md:space-y-0 md:flex md:items-center md:gap-4">
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar por nombre, teléfono, categoría..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="block w-full rounded-[var(--radius-custom)] border border-gray-300 py-2.5 pl-10 pr-3 text-sm placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+          />
+        </div>
+
+        {/* Filter Channel */}
+        <div className="flex gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-400" />
+            <select
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+              className="rounded-[var(--radius-custom)] border border-gray-300 py-2.5 px-3 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] bg-white"
+            >
+              <option value="all">Todos los Canales</option>
+              <option value="instagram">Instagram</option>
+              <option value="telegram">Telegram</option>
+            </select>
+          </div>
+
+          {/* Filter Follow Up */}
+          <select
+            value={requiresFollowUp}
+            onChange={(e) => setRequiresFollowUp(e.target.value)}
+            className="rounded-[var(--radius-custom)] border border-gray-300 py-2.5 px-3 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] bg-white"
+          >
+            <option value="all">Todos los Estados</option>
+            <option value="true">Requiere Seguimiento</option>
+            <option value="false">Al día</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Main Content Layout */}
+      <div className="flex-1 bg-white rounded-[var(--radius-custom)] shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[400px]">
+        {isLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent mb-4"></div>
+            <p className="text-sm text-gray-500">Cargando datos de leads...</p>
+          </div>
+        ) : error ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-red-500">
+            <AlertCircle className="h-10 w-10 mb-2" />
+            <p className="text-sm font-semibold">Error al conectar con el servidor.</p>
+          </div>
+        ) : leads.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-gray-400">
+            <MessageSquare className="h-12 w-12 mb-2 stroke-[1.5]" />
+            <p className="text-sm">No se encontraron leads con los filtros aplicados.</p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Canal</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Contacto</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Teléfono / IDs</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Interés</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Fecha / Hora</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Seguimiento</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {leads.map((lead) => {
+                    const isInstagram = lead.channel?.toLowerCase() === "instagram";
+                    return (
+                      <tr
+                        key={lead.id}
+                        className="hover:bg-gray-50/50 transition-colors"
+                      >
+                        {/* Channel Column */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {isInstagram ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-100">
+                              <Instagram className="h-3.5 w-3.5" />
+                              Instagram
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-100">
+                              <Send className="h-3.5 w-3.5" />
+                              Telegram
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Contact Name */}
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-[var(--color-text-custom)]">
+                          {lead.contactName || "Sin Nombre"}
+                        </td>
+
+                        {/* Phone / IDs */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {lead.phone ? (
+                            <span>{lead.phone}</span>
+                          ) : isInstagram ? (
+                            <span className="font-mono">IG: {lead.instagramId || "n/a"}</span>
+                          ) : (
+                            <span className="font-mono">TG: {lead.telegramId || "n/a"}</span>
+                          )}
+                        </td>
+
+                        {/* Categoria Interes */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">
+                            {lead.categoriaInteres || "General"}
+                          </span>
+                        </td>
+
+                        {/* Date/Time */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-gray-700">{formatDate(lead.fechaMensaje)}</span>
+                            <span className="text-xs text-gray-400">{formatTime(lead.horaMensaje)}</span>
+                          </div>
+                        </td>
+
+                        {/* Followup Status Badge */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {lead.requiereFollowup ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--color-accent)] bg-opacity-10 text-[var(--color-accent)] border border-[var(--color-accent)] border-opacity-20">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              Requiere Atención
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              Al día
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions (View details) */}
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                          <button
+                            onClick={() => setSelectedLead(lead)}
+                            className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:underline font-bold cursor-pointer"
+                          >
+                            <Eye className="h-4.5 w-4.5" />
+                            Ver Ficha
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {leads.map((lead) => {
+                const isInstagram = lead.channel?.toLowerCase() === "instagram";
+                return (
+                  <div
+                    key={lead.id}
+                    onClick={() => setSelectedLead(lead)}
+                    className="p-5 active:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold text-gray-800 text-base">
+                        {lead.contactName || "Sin Nombre"}
+                      </h3>
+                      {isInstagram ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                          <Instagram className="h-3 w-3" />
+                          Instagram
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-100">
+                          <Send className="h-3 w-3" />
+                          Telegram
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-gray-500 font-mono mb-2">
+                      {lead.phone || (isInstagram ? `IG: ${lead.instagramId}` : `TG: ${lead.telegramId}`)}
+                    </p>
+
+                    <div className="flex flex-wrap gap-2 items-center justify-between mt-3">
+                      <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                        {lead.categoriaInteres || "General"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">
+                          {formatDate(lead.fechaMensaje)}
+                        </span>
+                        {lead.requiereFollowup && (
+                          <span className="inline-flex items-center h-2 w-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Slide-over Side Panel for Lead Details */}
+      {selectedLead && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden">
+            {/* Backdrop */}
+            <div
+              onClick={() => setSelectedLead(null)}
+              className="absolute inset-0 bg-slate-950/40 backdrop-blur-xs transition-opacity"
+            />
+            {/* Panel container */}
+            <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+              <div className="pointer-events-auto w-screen max-w-md transform bg-white shadow-2xl transition-all duration-300 ease-in-out">
+                {/* Header */}
+                <div className="flex h-20 items-center justify-between px-6 border-b border-gray-100 bg-[var(--color-primary)] text-white">
+                  <div className="flex items-center gap-2">
+                    <User className="h-6 w-6" />
+                    <div>
+                      <h2 className="font-extrabold text-lg leading-tight">
+                        {selectedLead.contactName || "Detalle del Lead"}
+                      </h2>
+                      <p className="text-xs text-sky-100">Ficha Técnica de Conversación</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedLead(null)}
+                    className="rounded-md text-white hover:text-sky-200 focus:outline-none cursor-pointer"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="h-[calc(100vh-80px)] overflow-y-auto p-6 space-y-6">
+                  {/* Lead Information Cards */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-4 rounded-[var(--radius-custom)] border border-gray-100">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                        Canal
+                      </span>
+                      {selectedLead.channel?.toLowerCase() === "instagram" ? (
+                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-rose-700">
+                          <Instagram className="h-4 w-4" /> Instagram
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-sky-700">
+                          <Send className="h-4 w-4" /> Telegram
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="bg-gray-50 p-4 rounded-[var(--radius-custom)] border border-gray-100">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                        Mensajes
+                      </span>
+                      <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                        <MessageSquare className="h-4 w-4 text-gray-400" />
+                        {selectedLead.cantidadMensajes || 1}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contact Details */}
+                  <div className="bg-gray-50 p-5 rounded-[var(--radius-custom)] border border-gray-100 space-y-3">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                      Información de Contacto
+                    </h3>
+                    {selectedLead.phone && (
+                      <div className="flex items-center text-sm text-gray-700">
+                        <Phone className="h-4.5 w-4.5 text-gray-400 mr-2.5 flex-shrink-0" />
+                        <span className="font-medium">{selectedLead.phone}</span>
+                      </div>
+                    )}
+                    {selectedLead.instagramId && (
+                      <div className="flex items-center text-sm text-gray-700">
+                        <Instagram className="h-4.5 w-4.5 text-gray-400 mr-2.5 flex-shrink-0" />
+                        <span className="font-mono text-xs">{selectedLead.instagramId}</span>
+                      </div>
+                    )}
+                    {selectedLead.telegramId && (
+                      <div className="flex items-center text-sm text-gray-700">
+                        <Send className="h-4.5 w-4.5 text-gray-400 mr-2.5 flex-shrink-0" />
+                        <span className="font-mono text-xs">{selectedLead.telegramId}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center text-sm text-gray-700">
+                      <Calendar className="h-4.5 w-4.5 text-gray-400 mr-2.5 flex-shrink-0" />
+                      <span>
+                        {formatDate(selectedLead.fechaMensaje)} a las {formatTime(selectedLead.horaMensaje)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Follow up status banner */}
+                  <div
+                    className={`p-4 rounded-[var(--radius-custom)] border flex items-center gap-3 ${
+                      selectedLead.requiereFollowup
+                        ? "bg-amber-50 border-amber-200 text-amber-800"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    }`}
+                  >
+                    {selectedLead.requiereFollowup ? (
+                      <>
+                        <AlertCircle className="h-6 w-6 text-[var(--color-accent)] flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-sm">Requiere Seguimiento</p>
+                          <p className="text-xs opacity-90">Este lead necesita respuesta o contacto proactivo.</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-sm">Al Día / Cerrado</p>
+                          <p className="text-xs opacity-90">No hay acciones pendientes identificadas por la IA.</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Categoria Interes */}
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                      Categoría de Interés
+                    </span>
+                    <span className="inline-flex items-center rounded-md bg-sky-50 px-3 py-1.5 text-sm font-semibold text-[var(--color-primary)] border border-sky-100">
+                      <Bookmark className="h-4 w-4 mr-1.5" />
+                      {selectedLead.categoriaInteres || "No Categorizado"}
+                    </span>
+                  </div>
+
+                  {/* Resumen Ejecutivo */}
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                      Resumen Ejecutivo de la IA
+                    </span>
+                    <div className="bg-gray-50 p-4 rounded-[var(--radius-custom)] border border-gray-100 text-sm text-gray-700 leading-relaxed font-medium">
+                      {selectedLead.resumenEjecutivo || "Sin resumen disponible."}
+                    </div>
+                  </div>
+
+                  {/* Detalle de Conversación */}
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                      Detalle de Interés / Conversación
+                    </span>
+                    <div className="bg-white p-4 rounded-[var(--radius-custom)] border border-gray-200 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                      {selectedLead.detalleInteres || "No hay detalles registrados."}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

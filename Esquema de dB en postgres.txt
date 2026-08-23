@@ -1,0 +1,67 @@
+Tengo la siguiente estructura de base de datos PostgreSQL y quiero generar un frontend (dashboard interactivo) para administrarla:
+
+### Tablas y Relaciones:
+
+1. `productos` (Catálogo de equipamiento/software principal)
+- `id` (SERIAL PRIMARY KEY)
+- `producto` (VARCHAR)
+- `descripcion_breve` (TEXT)
+- `precio` (VARCHAR)
+- `contacto` (VARCHAR)
+- `ultima_actualizacion` (TIMESTAMP)
+
+2. `catalogo_digital` (Librerías STL, aditamentos y accesorios)
+- `id` (SERIAL PRIMARY KEY)
+- `producto` (VARCHAR)
+- `precio_actual` (NUMERIC)
+- `precio_original` (NUMERIC)
+- `moneda` (VARCHAR)
+- `en_oferta` (BOOLEAN)
+- `gratis` (BOOLEAN)
+- `notas` (TEXT)
+
+3. `cursos` (Master de programas académicos)
+- `id` (SERIAL PRIMARY KEY)
+- `codigo` (VARCHAR, UNIQUE)
+- `nombre_del_curso` (VARCHAR)
+- `tipo_modalidad` (TEXT)
+- `nivel` (VARCHAR)
+- `carga_horaria_duracion` (VARCHAR)
+- `contenido_resumido` (TEXT)
+- `incluye` (TEXT)
+- `forma_de_pago` (VARCHAR)
+- `contacto_inscripcion` (VARCHAR)
+
+4. `curso_ediciones` (Detalle de fechas/cohortes - Relación 1 a N con `cursos`)
+- `id` (SERIAL PRIMARY KEY)
+- `curso_id` (INTEGER, FK -> cursos.id)
+- `nombre_edicion` (VARCHAR)
+- `dictante` (VARCHAR)
+- `fecha_inicio` (DATE)
+- `fechas_especificas` (TEXT)
+- `participantes` (VARCHAR)
+- `precio` (VARCHAR)
+- `estado` (VARCHAR)
+
+5. `leads_conversaciones` (Registro de contactos y prospectos)
+- `id` (SERIAL PRIMARY KEY)
+- `channel` (VARCHAR)
+- `contact_name` (VARCHAR)
+- `phone` (VARCHAR)
+- `telegram_id` (VARCHAR)
+- `instagram_id` (VARCHAR)
+- `categoria_interes` (VARCHAR)
+- `detalle_interes` (TEXT)
+- `requiere_followup` (BOOLEAN)
+- `resumen_ejecutivo` (TEXT)
+- `fecha_mensaje` (DATE)
+- `hora_mensaje` (TIME)
+- `cantidad_mensajes` (INTEGER)
+- `conversation_id` (VARCHAR)
+
+---
+Requerimientos del Frontend:
+- Crea vistas/vistas de tabla (DataTables) para cada módulo.
+- Formulario modal para crear/editar registros.
+- Vista maestro-detalle para `cursos` y sus respectivas `curso_ediciones`.
+- Filtro rápido para `leads_conversaciones` según `requiere_followup` y `channel`.

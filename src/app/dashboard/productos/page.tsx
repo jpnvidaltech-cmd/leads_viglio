@@ -1,0 +1,466 @@
+"use client";
+
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import {
+  Package,
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  DollarSign,
+  Phone,
+  Clock,
+  X,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
+
+interface Product {
+  id: number;
+  producto: string | null;
+  descripcionBreve: string | null;
+  precio: string | null;
+  contacto: string | null;
+  ultimaActualizacion: string | null;
+}
+
+export default function ProductosPage() {
+  const { data: session } = useSession();
+  const queryClient = useQueryClient();
+  const isAdmin = session?.user?.role === "admin";
+
+  const [search, setSearch] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+
+  // Form state
+  const [form, setForm] = useState({
+    producto: "",
+    descripcionBreve: "",
+    precio: "",
+    contacto: "",
+  });
+
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loadingAction, setLoadingAction] = useState(false);
+
+  // Fetch products
+  const { data: products = [], isLoading } = useQuery<Product[]>({
+    queryKey: ["productos"],
+    queryFn: async () => {
+      const res = await fetch("/api/productos");
+      if (!res.ok) throw new Error("Error fetching products");
+      return res.json();
+    },
+  });
+
+  const refetch = () => queryClient.invalidateQueries({ queryKey: ["productos"] });
+
+  const handleOpenModal = (product?: Product) => {
+    setErrorMsg(null);
+    if (product) {
+      setEditingProduct(product);
+      setForm({
+        producto: product.producto || "",
+        descripcionBreve: product.descripcionBreve || "",
+        precio: product.precio || "",
+        contacto: product.contacto || "",
+      });
+    } else {
+      setEditingProduct(null);
+      setForm({
+        producto: "",
+        descripcionBreve: "",
+        precio: "",
+        contacto: "",
+      });
+    }
+    setModalOpen(true);
+  };
+
+  const handleOpenDeleteConfirm = (id: number) => {
+    setDeleteTargetId(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.producto) {
+      setErrorMsg("El nombre del producto es obligatorio.");
+      return;
+    }
+
+    setLoadingAction(true);
+    setErrorMsg(null);
+
+    try {
+      const url = editingProduct ? `/api/productos/${editingProduct.id}` : "/api/productos";
+      const method = editingProduct ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || "Ocurrió un error inesperado");
+      } else {
+        refetch();
+        setModalOpen(false);
+      }
+    } catch {
+      setErrorMsg("Error al conectar con el servidor.");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetId) return;
+
+    setLoadingAction(true);
+
+    try {
+      const res = await fetch(`/api/productos/${deleteTargetId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Error al eliminar");
+      } else {
+        refetch();
+        setDeleteConfirmOpen(false);
+        setDeleteTargetId(null);
+      }
+    } catch {
+      alert("Error de red.");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const formatOnlyDate = (dateString: string | null) => {
+    if (!dateString) return "Sin fecha";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("es-AR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const formatOnlyTime = (dateString: string | null) => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString("es-AR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  };
+
+  // Filter products by search term
+  const filteredProducts = products.filter((p) =>
+    p.producto?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Header */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-[var(--color-primary)]">
+            Productos & Equipamiento
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Gestión del equipamiento y licencias de software dental ofrecidos.
+          </p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => handleOpenModal()}
+            className="inline-flex items-center gap-2 rounded-[var(--radius-custom)] bg-[var(--color-primary)] text-white px-4 py-2.5 text-sm font-bold shadow-md hover:bg-opacity-95 cursor-pointer transition-all self-start sm:self-center"
+          >
+            <Plus className="h-5 w-5" />
+            Nuevo Producto
+          </button>
+        )}
+      </div>
+
+      {/* Search Input */}
+      <div className="bg-white p-4 rounded-[var(--radius-custom)] shadow-sm border border-gray-100 mb-6 flex items-center gap-4">
+        <div className="relative flex-1">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar por nombre del producto..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="block w-full rounded-[var(--radius-custom)] border border-gray-300 py-2.5 pl-10 pr-3 text-sm placeholder-gray-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+          />
+        </div>
+      </div>
+
+      {/* Main List */}
+      <div className="flex-1 bg-white rounded-[var(--radius-custom)] shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[400px]">
+        {isLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent mb-4"></div>
+            <p className="text-sm text-gray-500">Cargando catálogo...</p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-gray-400">
+            <Package className="h-12 w-12 mb-2 stroke-[1.5]" />
+            <p className="text-sm">No se encontraron productos registrados.</p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Producto</th>
+                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Descripción</th>
+                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Precio</th>
+                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Contacto</th>
+                    <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Última Modificación</th>
+                    {isAdmin && <th className="px-3 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Acciones</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredProducts.map((p) => (
+                    <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-3 py-4 text-xs font-bold text-[var(--color-text-custom)]">
+                        {p.producto}
+                      </td>
+                      <td className="px-3 py-4 text-xs text-gray-500 max-w-xs whitespace-normal break-words">
+                        {p.descripcionBreve || "Sin descripción."}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-700">
+                        {p.precio || "n/a"}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-xs text-gray-500">
+                        {p.contacto || "n/a"}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-xs text-gray-400">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-700 flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-gray-400" />
+                            {formatOnlyDate(p.ultimaActualizacion)}
+                          </span>
+                          <span className="text-gray-400 ml-4">{formatOnlyTime(p.ultimaActualizacion)}</span>
+                        </div>
+                      </td>
+                      {isAdmin && (
+                        <td className="px-3 py-4 whitespace-nowrap text-right text-xs">
+                          <button
+                            onClick={() => handleOpenModal(p)}
+                            className="p-1.5 text-gray-400 hover:text-[var(--color-primary)] hover:bg-sky-50 rounded-lg transition-all cursor-pointer mr-1"
+                            title="Editar Producto"
+                          >
+                            <Edit2 className="h-4.5 w-4.5" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenDeleteConfirm(p.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                            title="Eliminar Producto"
+                          >
+                            <Trash2 className="h-4.5 w-4.5" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {filteredProducts.map((p) => (
+                <div key={p.id} className="p-5 space-y-2 hover:bg-gray-50/50 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-bold text-gray-800 text-base">{p.producto}</h3>
+                    <span className="text-sm font-bold text-[var(--color-primary)]">{p.precio || "n/a"}</span>
+                  </div>
+                  <p className="text-sm text-gray-500 line-clamp-2">{p.descripcionBreve || "Sin descripción."}</p>
+                  <div className="flex flex-wrap gap-4 text-xs text-gray-400 pt-2 items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      {p.contacto || "n/a"}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatOnlyDate(p.ultimaActualizacion)} {formatOnlyTime(p.ultimaActualizacion)}
+                    </span>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
+                      <button
+                        onClick={() => handleOpenModal(p)}
+                        className="inline-flex items-center gap-1 text-sm text-[var(--color-primary)] font-bold cursor-pointer"
+                      >
+                        <Edit2 className="h-4 w-4" /> Editar
+                      </button>
+                      <button
+                        onClick={() => handleOpenDeleteConfirm(p.id)}
+                        className="inline-flex items-center gap-1 text-sm text-red-500 font-bold cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" /> Eliminar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Product Form Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-md rounded-[var(--radius-custom)] shadow-2xl overflow-hidden border border-gray-100">
+            {/* Header */}
+            <div className="bg-[var(--color-primary)] text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="font-extrabold text-lg text-white" style={{ color: '#ffffff' }}>
+                {editingProduct ? "Editar Producto" : "Agregar Nuevo Producto"}
+              </h3>
+              <button onClick={() => setModalOpen(false)} className="text-white hover:text-sky-200 cursor-pointer">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {errorMsg && (
+                <div className="rounded-lg bg-rose-50 p-3 text-xs text-rose-600 border border-rose-100">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase">Nombre del Producto *</label>
+                <input
+                  type="text"
+                  required
+                  value={form.producto}
+                  onChange={(e) => setForm({ ...form, producto: e.target.value })}
+                  className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                  placeholder="E.g. Escáner Intraoral Medit i700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase">Descripción Breve</label>
+                <textarea
+                  value={form.descripcionBreve}
+                  onChange={(e) => setForm({ ...form, descripcionBreve: e.target.value })}
+                  rows={3}
+                  className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                  placeholder="E.g. Escáner intraoral 3D con tecnología de escaneo de alta velocidad..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase">Precio / Rango</label>
+                  <input
+                    type="text"
+                    value={form.precio}
+                    onChange={(e) => setForm({ ...form, precio: e.target.value })}
+                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                    placeholder="E.g. USD 12.000 / Consultar"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase">Contacto Comercial</label>
+                  <input
+                    type="text"
+                    value={form.contacto}
+                    onChange={(e) => setForm({ ...form, contacto: e.target.value })}
+                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                    placeholder="E.g. +54 9 11..."
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-[var(--radius-custom)] border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingAction}
+                  className="inline-flex items-center gap-1 rounded-[var(--radius-custom)] bg-[var(--color-primary)] text-white px-4 py-2 text-sm font-bold hover:bg-opacity-90 disabled:bg-gray-400 cursor-pointer"
+                >
+                  {loadingAction && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {editingProduct ? "Actualizar" : "Crear"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setDeleteConfirmOpen(false)} />
+          <div className="relative bg-white w-full max-w-sm rounded-[var(--radius-custom)] shadow-2xl p-6 border border-gray-100">
+            <div className="flex items-center gap-3 text-red-500 mb-4">
+              <AlertCircle className="h-8 w-8 flex-shrink-0" />
+              <div>
+                <h3 className="font-extrabold text-lg leading-tight text-gray-800">
+                  ¿Confirmar eliminación?
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed mb-6">
+              Se eliminarán de forma permanente todos los datos correspondientes a este producto del catálogo.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="rounded-[var(--radius-custom)] border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={loadingAction}
+                className="inline-flex items-center gap-1 rounded-[var(--radius-custom)] bg-red-600 text-white px-4 py-2 text-sm font-bold hover:bg-red-700 disabled:bg-gray-400 cursor-pointer animate-pulse"
+              >
+                {loadingAction && <Loader2 className="h-4 w-4 animate-spin" />}
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
