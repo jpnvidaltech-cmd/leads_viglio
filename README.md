@@ -54,8 +54,8 @@ Este proyecto es un panel de administración full-stack desarrollado para la ges
    npx prisma db seed
    ```
    **Credenciales iniciales creadas:**
-   - **Usuario:** `admin@leads.com`
-   - **Contraseña:** `agente77`
+   - **Usuario:** `ingresa un email`
+   - **Contraseña:** `genera tu contraseña`
    - **Rol:** `admin`
 
 6. **Correr Servidor de Desarrollo:**
