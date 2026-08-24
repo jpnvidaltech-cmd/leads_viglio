@@ -630,7 +630,7 @@ export default function CursosPage() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-extrabold text-gray-700 uppercase tracking-wider">
-                    Ediciones / Cohortes ({courseForm.ediciones.length})
+                    Ediciones / Cursos ({courseForm.ediciones.length})
                   </h4>
                   {!subEditionFormOpen && (
                     <button
@@ -717,7 +717,7 @@ export default function CursosPage() {
                           value={subEditionForm.nombreEdicion}
                           onChange={(e) => setSubEditionForm({ ...subEditionForm, nombreEdicion: e.target.value })}
                           className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
-                          placeholder="E.g. Cohorte 1 / Septiembre"
+                          placeholder="E.g. Curso 1 / Septiembre"
                         />
                       </div>
                       <div>
