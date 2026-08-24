@@ -46,7 +46,8 @@ export async function POST(request: Request) {
       contenidoResumido,
       incluye,
       formaDePago,
-      contactoInscripcion
+      contactoInscripcion,
+      ediciones
     } = body;
 
     if (!codigo) {
@@ -71,7 +72,21 @@ export async function POST(request: Request) {
         contenidoResumido,
         incluye,
         formaDePago,
-        contactoInscripcion
+        contactoInscripcion,
+        ediciones: {
+          create: (ediciones || []).map((ed: any) => ({
+            nombreEdicion: ed.nombreEdicion,
+            dictante: ed.dictante,
+            fechaInicio: ed.fechaInicio ? new Date(ed.fechaInicio) : null,
+            fechasEspecificas: ed.fechasEspecificas,
+            participantes: ed.participantes,
+            precio: ed.precio,
+            estado: ed.estado || "Programada"
+          }))
+        }
+      },
+      include: {
+        ediciones: true
       }
     });
 

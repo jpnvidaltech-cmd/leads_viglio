@@ -33,7 +33,8 @@ export async function PUT(
       contenidoResumido,
       incluye,
       formaDePago,
-      contactoInscripcion
+      contactoInscripcion,
+      ediciones
     } = body;
 
     if (codigo) {
@@ -48,19 +49,49 @@ export async function PUT(
       }
     }
 
-    const updatedCurso = await prisma.curso.update({
-      where: { id },
-      data: {
-        codigo,
-        nombreDelCurso,
-        tipoModalidad,
-        nivel,
-        cargaHorariaDuracion,
-        contenidoResumido,
-        incluye,
-        formaDePago,
-        contactoInscripcion
+    const updatedCurso = await prisma.$transaction(async (tx) => {
+      // 1. Actualizar curso
+      await tx.curso.update({
+        where: { id },
+        data: {
+          codigo,
+          nombreDelCurso,
+          tipoModalidad,
+          nivel,
+          cargaHorariaDuracion,
+          contenidoResumido,
+          incluye,
+          formaDePago,
+          contactoInscripcion
+        }
+      });
+
+      // 2. Eliminar ediciones viejas
+      await tx.cursoEdicion.deleteMany({
+        where: { cursoId: id }
+      });
+
+      // 3. Crear ediciones nuevas
+      if (ediciones && ediciones.length > 0) {
+        await tx.cursoEdicion.createMany({
+          data: ediciones.map((ed: any) => ({
+            cursoId: id,
+            nombreEdicion: ed.nombreEdicion,
+            dictante: ed.dictante,
+            fechaInicio: ed.fechaInicio ? new Date(ed.fechaInicio) : null,
+            fechasEspecificas: ed.fechasEspecificas,
+            participantes: ed.participantes,
+            precio: ed.precio,
+            estado: ed.estado || "Programada"
+          }))
+        });
       }
+
+      // 4. Retornar con ediciones
+      return await tx.curso.findUnique({
+        where: { id },
+        include: { ediciones: true }
+      });
     });
 
     return NextResponse.json(updatedCurso);

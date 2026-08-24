@@ -49,6 +49,17 @@ interface Edition {
   estado: string | null;
 }
 
+interface EditionForm {
+  id?: number;
+  nombreEdicion: string;
+  dictante: string;
+  fechaInicio: string;
+  fechasEspecificas: string;
+  participantes: string;
+  precio: string;
+  estado: string;
+}
+
 export default function CursosPage() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -61,15 +72,22 @@ export default function CursosPage() {
   const [courseModalOpen, setCourseModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
 
-  const [editionModalOpen, setEditionModalOpen] = useState(false);
-  const [editingEdition, setEditingEdition] = useState<Edition | null>(null);
-  const [targetCourseId, setTargetCourseId] = useState<number | null>(null);
-
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: "course" | "edition"; id: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "course"; id: number } | null>(null);
 
   // Form states
-  const [courseForm, setCourseForm] = useState({
+  const [courseForm, setCourseForm] = useState<{
+    codigo: string;
+    nombreDelCurso: string;
+    tipoModalidad: string;
+    nivel: string;
+    cargaHorariaDuracion: string;
+    contenidoResumido: string;
+    incluye: string;
+    formaDePago: string;
+    contactoInscripcion: string;
+    ediciones: EditionForm[];
+  }>({
     codigo: "",
     nombreDelCurso: "",
     tipoModalidad: "",
@@ -79,8 +97,9 @@ export default function CursosPage() {
     incluye: "",
     formaDePago: "",
     contactoInscripcion: "",
+    ediciones: [],
   });
-
+ 
   const [editionForm, setEditionForm] = useState({
     nombreEdicion: "",
     dictante: "",
@@ -88,12 +107,25 @@ export default function CursosPage() {
     fechasEspecificas: "",
     participantes: "",
     precio: "",
-    estado: "abierta",
+    estado: "Programada",
   });
-
+ 
+  // Estados locales para la administración de ediciones de un curso en el modal único
+  const [subEditionForm, setSubEditionForm] = useState<EditionForm>({
+    nombreEdicion: "",
+    dictante: "",
+    fechaInicio: "",
+    fechasEspecificas: "",
+    participantes: "",
+    precio: "",
+    estado: "Programada",
+  });
+  const [editingSubEditionIndex, setEditingSubEditionIndex] = useState<number | null>(null);
+  const [subEditionFormOpen, setSubEditionFormOpen] = useState(false);
+ 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
-
+ 
   // Fetch courses with editions
   const { data: courses = [], isLoading } = useQuery<Course[]>({
     queryKey: ["cursos"],
@@ -103,13 +135,25 @@ export default function CursosPage() {
       return res.json();
     },
   });
-
+ 
   // Queries invalidation
   const refetch = () => queryClient.invalidateQueries({ queryKey: ["cursos"] });
-
+ 
   // Open modals with pre-filled fields
   const handleOpenCourseModal = (course?: Course) => {
     setErrorMsg(null);
+    setSubEditionForm({
+      nombreEdicion: "",
+      dictante: "",
+      fechaInicio: "",
+      fechasEspecificas: "",
+      participantes: "",
+      precio: "",
+      estado: "Programada",
+    });
+    setEditingSubEditionIndex(null);
+    setSubEditionFormOpen(false);
+ 
     if (course) {
       setEditingCourse(course);
       setCourseForm({
@@ -122,6 +166,16 @@ export default function CursosPage() {
         incluye: course.incluye || "",
         formaDePago: course.formaDePago || "",
         contactoInscripcion: course.contactoInscripcion || "",
+        ediciones: (course.ediciones || []).map((ed) => ({
+          id: ed.id,
+          nombreEdicion: ed.nombreEdicion || "",
+          dictante: ed.dictante || "",
+          fechaInicio: ed.fechaInicio ? ed.fechaInicio.split("T")[0] : "",
+          fechasEspecificas: ed.fechasEspecificas || "",
+          participantes: ed.participantes || "",
+          precio: ed.precio || "",
+          estado: ed.estado || "Programada",
+        })),
       });
     } else {
       setEditingCourse(null);
@@ -135,47 +189,61 @@ export default function CursosPage() {
         incluye: "",
         formaDePago: "",
         contactoInscripcion: "",
+        ediciones: [],
       });
     }
     setCourseModalOpen(true);
   };
 
-  const handleOpenEditionModal = (courseId: number, edition?: Edition) => {
-    setErrorMsg(null);
-    setTargetCourseId(courseId);
-    if (edition) {
-      setEditingEdition(edition);
-      let dateVal = "";
-      if (edition.fechaInicio) {
-        dateVal = edition.fechaInicio.split("T")[0];
-      }
-      setEditionForm({
-        nombreEdicion: edition.nombreEdicion || "",
-        dictante: edition.dictante || "",
-        fechaInicio: dateVal,
-        fechasEspecificas: edition.fechasEspecificas || "",
-        participantes: edition.participantes || "",
-        precio: edition.precio || "",
-        estado: edition.estado || "abierta",
-      });
-    } else {
-      setEditingEdition(null);
-      setEditionForm({
-        nombreEdicion: "",
-        dictante: "",
-        fechaInicio: "",
-        fechasEspecificas: "",
-        participantes: "",
-        precio: "",
-        estado: "abierta",
-      });
-    }
-    setEditionModalOpen(true);
-  };
-
-  const handleOpenDeleteConfirm = (type: "course" | "edition", id: number) => {
+  const handleOpenDeleteConfirm = (type: "course", id: number) => {
     setDeleteTarget({ type, id });
     setDeleteConfirmOpen(true);
+  };
+
+  // Funciones de gestión de sub-ediciones locales
+  const handleSaveSubEdition = () => {
+    if (!subEditionForm.nombreEdicion) {
+      alert("El nombre de la edición es obligatorio.");
+      return;
+    }
+
+    if (editingSubEditionIndex !== null) {
+      const updated = [...courseForm.ediciones];
+      updated[editingSubEditionIndex] = subEditionForm;
+      setCourseForm({ ...courseForm, ediciones: updated });
+      setEditingSubEditionIndex(null);
+    } else {
+      setCourseForm({
+        ...courseForm,
+        ediciones: [...courseForm.ediciones, subEditionForm],
+      });
+    }
+
+    setSubEditionForm({
+      nombreEdicion: "",
+      dictante: "",
+      fechaInicio: "",
+      fechasEspecificas: "",
+      participantes: "",
+      precio: "",
+      estado: "Programada",
+    });
+    setSubEditionFormOpen(false);
+  };
+
+  const handleEditSubEdition = (index: number) => {
+    setSubEditionForm(courseForm.ediciones[index]);
+    setEditingSubEditionIndex(index);
+    setSubEditionFormOpen(true);
+  };
+
+  const handleDeleteSubEdition = (index: number) => {
+    const updated = courseForm.ediciones.filter((_, i) => i !== index);
+    setCourseForm({ ...courseForm, ediciones: updated });
+    if (editingSubEditionIndex === index) {
+      setEditingSubEditionIndex(null);
+      setSubEditionFormOpen(false);
+    }
   };
 
   // Submit Course Form
@@ -213,61 +281,20 @@ export default function CursosPage() {
     }
   };
 
-  // Submit Edition Form
-  const handleEditionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editionForm.nombreEdicion) {
-      setErrorMsg("El nombre de la edición es obligatorio.");
-      return;
-    }
-
-    setLoadingAction(true);
-    setErrorMsg(null);
-
-    try {
-      const url = editingEdition
-        ? `/api/curso-ediciones/${editingEdition.id}`
-        : "/api/curso-ediciones";
-      const method = editingEdition ? "PUT" : "POST";
-
-      const payload = editingEdition
-        ? editionForm
-        : { ...editionForm, cursoId: targetCourseId };
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.error || "Ocurrió un error inesperado");
-      } else {
-        refetch();
-        setEditionModalOpen(false);
-      }
-    } catch {
-      setErrorMsg("Error de conexión con el servidor.");
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-
-  // Confirm delete
+  // Confirm delete (solo para curso padre)
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
 
     setLoadingAction(true);
-    const { type, id } = deleteTarget;
+    const { id } = deleteTarget;
 
     try {
-      const url = type === "course" ? `/api/cursos/${id}` : `/api/curso-ediciones/${id}`;
+      const url = `/api/cursos/${id}`;
       const res = await fetch(url, { method: "DELETE" });
 
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Error al eliminar");
+        alert(data.error || "Error al eliminar el curso");
       } else {
         refetch();
         setDeleteConfirmOpen(false);
@@ -403,15 +430,6 @@ export default function CursosPage() {
                           <h4 className="text-sm font-bold text-[var(--color-primary)] uppercase tracking-wider">
                             Ediciones Programadas
                           </h4>
-                          {isAdmin && (
-                            <button
-                              onClick={() => handleOpenEditionModal(course.id)}
-                              className="inline-flex items-center gap-1 rounded-[var(--radius-custom)] bg-sky-100 text-[var(--color-primary)] px-3 py-1.5 text-xs font-bold shadow-sm hover:bg-sky-200 transition-all cursor-pointer"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              Programar Edición
-                            </button>
-                          )}
                         </div>
 
                         {course.ediciones.length === 0 ? (
@@ -427,8 +445,7 @@ export default function CursosPage() {
                                   <th className="px-5 py-3">Dictante</th>
                                   <th className="px-5 py-3">Fecha de Inicio</th>
                                   <th className="px-5 py-3">Estado</th>
-                                  <th className="px-5 py-3">Cupos / Precio</th>
-                                  {isAdmin && <th className="px-5 py-3 text-right">Acciones</th>}
+                                  <th className="px-5 py-3 text-right">Cupos / Precio</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -459,30 +476,12 @@ export default function CursosPage() {
                                         {ed.estado || "abierta"}
                                       </span>
                                     </td>
-                                    <td className="px-5 py-3.5 text-gray-500 font-medium">
+                                    <td className="px-5 py-3.5 text-gray-500 font-medium text-right">
                                       <div className="flex flex-col">
                                         <span className="text-gray-700 font-bold">{ed.precio || "Sin precio"}</span>
                                         <span className="text-xs">{ed.participantes || "Cupos n/a"}</span>
                                       </div>
                                     </td>
-                                    {isAdmin && (
-                                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                                        <button
-                                          onClick={() => handleOpenEditionModal(course.id, ed)}
-                                          className="p-1.5 text-gray-400 hover:text-[var(--color-primary)] rounded hover:bg-gray-50 cursor-pointer"
-                                          title="Editar Edición"
-                                        >
-                                          <Edit2 className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                          onClick={() => handleOpenDeleteConfirm("edition", ed.id)}
-                                          className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-gray-50 cursor-pointer"
-                                          title="Eliminar Edición"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </button>
-                                      </td>
-                                    )}
                                   </tr>
                                 ))}
                               </tbody>
@@ -626,6 +625,194 @@ export default function CursosPage() {
                 </div>
               </div>
 
+              {/* Sección de Ediciones Integrada */}
+              <hr className="border-gray-200/60 my-5" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-extrabold text-gray-700 uppercase tracking-wider">
+                    Ediciones / Cohortes ({courseForm.ediciones.length})
+                  </h4>
+                  {!subEditionFormOpen && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingSubEditionIndex(null);
+                        setSubEditionForm({
+                          nombreEdicion: "",
+                          dictante: "",
+                          fechaInicio: "",
+                          fechasEspecificas: "",
+                          participantes: "",
+                          precio: "",
+                          estado: "Programada",
+                        });
+                        setSubEditionFormOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[var(--color-primary)] hover:text-sky-700 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Agregar Edición
+                    </button>
+                  )}
+                </div>
+
+                {/* Lista de ediciones agregadas */}
+                {courseForm.ediciones.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic mb-4 bg-gray-50/50 p-3 rounded-lg border border-dashed border-gray-200">
+                    No hay ediciones cargadas para este curso. Agrega al menos una.
+                  </p>
+                ) : (
+                  <div className="space-y-2 mb-4">
+                    {courseForm.ediciones.map((ed, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/30 text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-gray-800">
+                            {ed.nombreEdicion} <span className="font-normal text-gray-500">| Dictante: {ed.dictante || "n/a"}</span>
+                          </p>
+                          <p className="text-gray-500">
+                            Inicio: <span className="font-semibold">{ed.fechaInicio || "n/a"}</span> {ed.fechasEspecificas && `(${ed.fechasEspecificas})`}
+                          </p>
+                          <p className="text-gray-500">
+                            Precio: <span className="font-semibold text-gray-700">{ed.precio || "Consultar"}</span> | Participantes: {ed.participantes || "n/a"} | Estado: <span className="capitalize font-semibold">{ed.estado}</span>
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditSubEdition(idx)}
+                            className="p-1 text-gray-400 hover:text-[var(--color-primary)] hover:bg-white rounded border border-transparent hover:border-gray-200 cursor-pointer"
+                            title="Editar"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubEdition(idx)}
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-white rounded border border-transparent hover:border-gray-200 cursor-pointer"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Sub-formulario colapsable para agregar/editar edición */}
+                {subEditionFormOpen && (
+                  <div className="p-4 rounded-lg border border-sky-100 bg-sky-50/10 space-y-3 mb-4 transition-all">
+                    <h5 className="text-xs font-bold text-[var(--color-primary)] uppercase">
+                      {editingSubEditionIndex !== null ? "Editar Edición" : "Nueva Edición"}
+                    </h5>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Nombre Edición *</label>
+                        <input
+                          type="text"
+                          required
+                          value={subEditionForm.nombreEdicion}
+                          onChange={(e) => setSubEditionForm({ ...subEditionForm, nombreEdicion: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                          placeholder="E.g. Cohorte 1 / Septiembre"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Dictante / Profesor</label>
+                        <input
+                          type="text"
+                          value={subEditionForm.dictante}
+                          onChange={(e) => setSubEditionForm({ ...subEditionForm, dictante: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                          placeholder="E.g. Dr. Pérez Giugovaz"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Fecha de Inicio</label>
+                        <input
+                          type="date"
+                          value={subEditionForm.fechaInicio}
+                          onChange={(e) => setSubEditionForm({ ...subEditionForm, fechaInicio: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Fechas Específicas / Detalles</label>
+                        <input
+                          type="text"
+                          value={subEditionForm.fechasEspecificas}
+                          onChange={(e) => setSubEditionForm({ ...subEditionForm, fechasEspecificas: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                          placeholder="E.g. 15 y 16 de Octubre de 9 a 18 hs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Participantes / Cupo</label>
+                        <input
+                          type="text"
+                          value={subEditionForm.participantes}
+                          onChange={(e) => setSubEditionForm({ ...subEditionForm, participantes: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                          placeholder="E.g. 12 alumnos"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Precio</label>
+                        <input
+                          type="text"
+                          value={subEditionForm.precio}
+                          onChange={(e) => setSubEditionForm({ ...subEditionForm, precio: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                          placeholder="E.g. 500 USD / $150.000 ARS"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase">Estado</label>
+                        <select
+                          value={subEditionForm.estado}
+                          onChange={(e) => setSubEditionForm({ ...subEditionForm, estado: e.target.value })}
+                          className="mt-1 block w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                        >
+                          <option value="Programada">Programada</option>
+                          <option value="abierta">Abierta / Inscripciones</option>
+                          <option value="cerrada">Cerrada / Cupos llenos</option>
+                          <option value="finalizada">Finalizada</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSubEditionFormOpen(false);
+                          setEditingSubEditionIndex(null);
+                        }}
+                        className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveSubEdition}
+                        className="rounded-md bg-[var(--color-primary)] text-white px-3 py-1.5 text-xs font-bold hover:bg-opacity-95 cursor-pointer"
+                      >
+                        {editingSubEditionIndex !== null ? "Guardar Cambios" : "Confirmar Edición"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
                 <button
                   type="button"
@@ -646,136 +833,7 @@ export default function CursosPage() {
             </form>
           </div>
         </div>
-      )}
-
-      {/* Edition Modal */}
-      {editionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setEditionModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-lg rounded-[var(--radius-custom)] shadow-2xl overflow-hidden border border-gray-100">
-            {/* Header */}
-            <div className="bg-[var(--color-primary)] text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-extrabold text-lg text-white" style={{ color: '#ffffff' }}>
-                {editingEdition ? "Editar Edición" : "Programar Nueva Edición"}
-              </h3>
-              <button onClick={() => setEditionModalOpen(false)} className="text-white hover:text-sky-200 cursor-pointer">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleEditionSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              {errorMsg && (
-                <div className="rounded-lg bg-rose-50 p-3 text-xs text-rose-600 border border-rose-100">
-                  {errorMsg}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase">Nombre Edición *</label>
-                  <input
-                    type="text"
-                    required
-                    value={editionForm.nombreEdicion}
-                    onChange={(e) => setEditionForm({ ...editionForm, nombreEdicion: e.target.value })}
-                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                    placeholder="E.g. Edición Otoño 2026"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase">Dictante</label>
-                  <input
-                    type="text"
-                    value={editionForm.dictante}
-                    onChange={(e) => setEditionForm({ ...editionForm, dictante: e.target.value })}
-                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                    placeholder="E.g. Dr. Marcelo Pérez"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase">Fecha de Inicio</label>
-                  <input
-                    type="date"
-                    value={editionForm.fechaInicio}
-                    onChange={(e) => setEditionForm({ ...editionForm, fechaInicio: e.target.value })}
-                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase">Estado</label>
-                  <select
-                    value={editionForm.estado}
-                    onChange={(e) => setEditionForm({ ...editionForm, estado: e.target.value })}
-                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] bg-white"
-                  >
-                    <option value="abierta">Abierta (Inscripciones)</option>
-                    <option value="cerrada">Cerrada</option>
-                    <option value="finalizada">Finalizada</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase">Fechas Específicas / Horario</label>
-                <input
-                  type="text"
-                  value={editionForm.fechasEspecificas}
-                  onChange={(e) => setEditionForm({ ...editionForm, fechasEspecificas: e.target.value })}
-                  className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                  placeholder="E.g. Viernes de 9:00 a 17:00hs, 3 encuentros"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase">Participantes / Cupo</label>
-                  <input
-                    type="text"
-                    value={editionForm.participantes}
-                    onChange={(e) => setEditionForm({ ...editionForm, participantes: e.target.value })}
-                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                    placeholder="E.g. Máx. 12 alumnos"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase">Precio</label>
-                  <input
-                    type="text"
-                    value={editionForm.precio}
-                    onChange={(e) => setEditionForm({ ...editionForm, precio: e.target.value })}
-                    className="mt-1 block w-full rounded-[var(--radius-custom)] border border-gray-300 px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                    placeholder="E.g. USD 500 / $450.000"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setEditionModalOpen(false)}
-                  className="rounded-[var(--radius-custom)] border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loadingAction}
-                  className="inline-flex items-center gap-1 rounded-[var(--radius-custom)] bg-[var(--color-primary)] text-white px-4 py-2 text-sm font-bold hover:bg-opacity-90 disabled:bg-gray-400 cursor-pointer"
-                >
-                  {loadingAction && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {editingEdition ? "Actualizar" : "Programar"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
+      )}      {/* Delete Confirmation Modal */}
       {deleteConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setDeleteConfirmOpen(false)} />
